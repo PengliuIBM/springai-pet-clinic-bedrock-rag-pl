@@ -1,0 +1,39 @@
+spring:
+  ai:
+    bedrock:
+      aws:
+        region: us-east-1
+      converse:
+        chat:
+          enabled: true
+          options:
+            model: us.anthropic.claude-sonnet-4-6
+            max-tokens: 1024
+            temperature: 0.7
+      titan:
+        embedding:
+          enabled: false
+      cohere:
+        embedding:
+          enabled: true
+          model: cohere.embed-english-v3
+          input-type: SEARCH_DOCUMENT
+    vectorstore:
+      chroma:
+        client:
+          host: http://localhost
+          port: 8000
+        collection-name: pet-knowledge
+        initialize-schema: true
+  datasource:
+    url: jdbc:h2:mem:petdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+server:
+  port: 8080

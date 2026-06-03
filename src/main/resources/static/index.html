@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring AI Pet - RAG Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; height: 100vh; display: flex; flex-direction: column; }
+
+        header { background: #1a73e8; color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+        header h1 { font-size: 1.3em; }
+        header .subtitle { font-size: 0.85em; opacity: 0.8; }
+
+        .main { display: flex; flex: 1; overflow: hidden; }
+
+        /* Left panel - Pet CRUD */
+        .panel-left { width: 380px; background: white; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .panel-left h2 { padding: 16px; font-size: 1.1em; border-bottom: 1px solid #eee; background: #fafafa; }
+        .pet-list { flex: 1; overflow-y: auto; padding: 12px; }
+        .pet-card { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .pet-card .name { font-weight: bold; font-size: 1.05em; color: #1a73e8; }
+        .pet-card .info { font-size: 0.85em; color: #666; margin-top: 4px; }
+        .pet-card .desc { font-size: 0.85em; color: #333; margin-top: 6px; font-style: italic; }
+        .pet-card .actions { margin-top: 8px; }
+        .pet-card .actions button { font-size: 0.8em; padding: 4px 10px; margin-right: 6px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-delete { background: #f44336; color: white; }
+        .btn-delete:hover { background: #d32f2f; }
+
+        .add-form { padding: 12px; border-top: 1px solid #eee; background: #fafafa; }
+        .add-form input, .add-form textarea { width: 100%; padding: 8px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em; }
+        .add-form textarea { resize: vertical; min-height: 50px; }
+        .add-form .row { display: flex; gap: 8px; }
+        .add-form .row input { flex: 1; }
+        .btn-add { width: 100%; padding: 10px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95em; }
+        .btn-add:hover { background: #1557b0; }
+
+        /* Right panel - Chat */
+        .panel-right { flex: 1; display: flex; flex-direction: column; background: white; }
+        .panel-right h2 { padding: 16px; font-size: 1.1em; border-bottom: 1px solid #eee; background: #fafafa; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; }
+        .chat-bubble { max-width: 75%; padding: 10px 14px; border-radius: 16px; margin-bottom: 10px; font-size: 0.93em; line-height: 1.5; word-wrap: break-word; }
+        .chat-bubble.user { background: #e3f2fd; margin-left: auto; border-bottom-right-radius: 4px; }
+        .chat-bubble.bot { background: #f1f1f1; margin-right: auto; border-bottom-left-radius: 4px; }
+        .chat-bubble.system { background: #fff3e0; margin: 0 auto 10px; text-align: center; font-size: 0.85em; color: #e65100; max-width: 90%; }
+        .chat-input { display: flex; padding: 12px; border-top: 1px solid #eee; background: #fafafa; }
+        .chat-input input { flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 20px; outline: none; font-size: 0.95em; }
+        .chat-input input:focus { border-color: #1a73e8; }
+        .chat-input button { margin-left: 10px; padding: 10px 20px; background: #1a73e8; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 0.95em; }
+        .chat-input button:hover { background: #1557b0; }
+        .chat-input button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .typing { color: #999; font-style: italic; padding: 6px 14px; }
+
+        /* Mode toggle */
+        .mode-toggle { display: flex; padding: 8px 16px; gap: 8px; background: #fafafa; border-bottom: 1px solid #eee; }
+        .mode-toggle label { font-size: 0.85em; padding: 6px 12px; border-radius: 16px; cursor: pointer; border: 1px solid #ddd; }
+        .mode-toggle input[type="radio"] { display: none; }
+        .mode-toggle input[type="radio"]:checked + label { background: #1a73e8; color: white; border-color: #1a73e8; }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Spring AI Pet</h1>
+            <div class="subtitle">CRUD + RAG Demo with Bedrock Claude + Chroma VectorStore</div>
+        </div>
+    </header>
+    <div class="main">
+        <!-- Left: Pet Management -->
+        <div class="panel-left">
+            <h2>Pets (<span id="pet-count">0</span>)</h2>
+            <div class="pet-list" id="pet-list"></div>
+            <div class="add-form">
+                <input type="text" id="pet-name" placeholder="Name" />
+                <div class="row">
+                    <input type="text" id="pet-species" placeholder="Species (dog/cat)" />
+                    <input type="text" id="pet-breed" placeholder="Breed" />
+                    <input type="number" id="pet-age" placeholder="Age" min="0" />
+                </div>
+                <textarea id="pet-desc" placeholder="Description (used for RAG search)"></textarea>
+                <button class="btn-add" onclick="addPet()">Add Pet</button>
+            </div>
+        </div>
+
+        <!-- Right: Chat -->
+        <div class="panel-right">
+            <div class="mode-toggle">
+                <input type="radio" name="mode" id="mode-rag" value="rag" checked>
+                <label for="mode-rag">RAG (search pets first)</label>
+                <input type="radio" name="mode" id="mode-chat" value="chat">
+                <label for="mode-chat">Direct Chat</label>
+                <input type="radio" name="mode" id="mode-stream" value="stream">
+                <label for="mode-stream">Stream Chat</label>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-bubble system">Ask questions about your pets! In RAG mode, answers are based on pet data stored in Chroma VectorStore.</div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="chat-input" placeholder="Ask about your pets..." onkeydown="if(event.key==='Enter')sendChat()" />
+                <button id="send-btn" onclick="sendChat()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Pet CRUD ---
+        async function loadPets() {
+            const res = await fetch('/pets');
+            const pets = await res.json();
+            const list = document.getElementById('pet-list');
+            document.getElementById('pet-count').textContent = pets.length;
+            list.innerHTML = pets.map(p => `
+                <div class="pet-card">
+                    <div class="name">${p.name}</div>
+                    <div class="info">${p.age}-year-old ${p.breed} ${p.species}</div>
+                    ${p.description ? `<div class="desc">"${p.description}"</div>` : ''}
+                    <div class="actions">
+                        <button class="btn-delete" onclick="deletePet(${p.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addPet() {
+            const pet = {
+                name: document.getElementById('pet-name').value,
+                species: document.getElementById('pet-species').value,
+                breed: document.getElementById('pet-breed').value,
+                age: parseInt(document.getElementById('pet-age').value) || 1,
+                description: document.getElementById('pet-desc').value
+            };
+            if (!pet.name || !pet.species) { alert('Name and species are required'); return; }
+            await fetch('/pets', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(pet) });
+            document.getElementById('pet-name').value = '';
+            document.getElementById('pet-species').value = '';
+            document.getElementById('pet-breed').value = '';
+            document.getElementById('pet-age').value = '';
+            document.getElementById('pet-desc').value = '';
+            loadPets();
+        }
+
+        async function deletePet(id) {
+            await fetch(`/pets/${id}`, { method: 'DELETE' });
+            loadPets();
+        }
+
+        // --- Chat ---
+        function getMode() {
+            return document.querySelector('input[name="mode"]:checked').value;
+        }
+
+        function appendMessage(text, type) {
+            const messages = document.getElementById('chat-messages');
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${type}`;
+            bubble.textContent = text;
+            messages.appendChild(bubble);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const btn = document.getElementById('send-btn');
+            const question = input.value.trim();
+            if (!question) return;
+
+            appendMessage(question, 'user');
+            input.value = '';
+            btn.disabled = true;
+
+            const mode = getMode();
+            try {
+                if (mode === 'rag') {
+                    const res = await fetch(`/rag/ask?question=${encodeURIComponent(question)}&topK=3`);
+                    const text = await res.text();
+                    appendMessage(text, 'bot');
+                } else if (mode === 'stream') {
+                    const res = await fetch(`/chat/stream?message=${encodeURIComponent(question)}`);
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    const bubble = document.createElement('div');
+                    bubble.className = 'chat-bubble bot';
+                    document.getElementById('chat-messages').appendChild(bubble);
+                    let fullText = '';
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('data:')) {
+                                fullText += line.slice(5);
+                                bubble.textContent = fullText;
+                            }
+                        }
+                    }
+                    document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+                } else {
+                    const res = await fetch(`/chat?message=${encodeURIComponent(question)}`);
+                    const text = await res.text();
+                    appendMessage(text, 'bot');
+                }
+            } catch (e) {
+                appendMessage('Error: ' + e.message, 'system');
+            }
+            btn.disabled = false;
+            input.focus();
+        }
+
+        // Init
+        loadPets();
+    </script>
+</body>
+</html>
