@@ -12,12 +12,11 @@ spring:
             temperature: 0.7
       titan:
         embedding:
-          enabled: false
+          enabled: true
+          model: amazon.titan-embed-text-v2:0
       cohere:
         embedding:
-          enabled: true
-          model: cohere.embed-english-v3
-          input-type: SEARCH_DOCUMENT
+          enabled: false
     vectorstore:
       chroma:
         client:

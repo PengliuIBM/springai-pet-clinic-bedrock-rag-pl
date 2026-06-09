@@ -190,3 +190,65 @@ spring:
 | Titan embed 格式 | Spring AI 库总是发 v2 请求格式 | Titan v1 与 Spring AI 1.1.7 不兼容 |
 | Titan v2 无权限 | on-demand 未启用 | 需要在 Model Access 中开通 |
 | **最终选择 Cohere** | Cohere embed 完全兼容 | Bedrock embedding 首选 Cohere |
+
+---
+
+## Cohere Embed vs Titan Embed v2 对比
+
+| 维度 | Cohere Embed English v3 | Amazon Titan Embed Text v2 |
+| ---- | ----------------------- | -------------------------- |
+| 提供方 | Cohere（第三方） | Amazon（自研） |
+| Model ID | `cohere.embed-english-v3` | `amazon.titan-embed-text-v2:0` |
+| 向量维度 | 1024（固定） | 256 / 512 / 1024（可配置） |
+| 语言 | 英文优化（另有 multilingual 版） | 多语言 |
+| 最大输入 | 512 tokens | 8192 tokens |
+| 输入类型 | 需指定 `input_type`（search_document / search_query） | 可选指定 `inputType` |
+| 请求格式 | `{"texts":["..."], "input_type":"..."}` | `{"inputText":"...", "dimensions":1024, "normalize":true}` |
+| Spring AI 1.1.7 兼容性 | 完全兼容 | 仅兼容 v2 格式，但很多账户未开通 on-demand |
+| 定价 | 按 token 计费 | 按 token 计费（通常更便宜） |
+
+### 核心区别
+
+**1. 请求格式不同**
+
+Cohere 要求指定 `input_type` 区分文档和查询：
+```json
+{
+  "texts": ["friendly dog loves swimming"],
+  "input_type": "search_document",
+  "truncate": "NONE"
+}
+```
+
+Titan v2 用 `inputText` + 可选的维度/归一化参数：
+```json
+{
+  "inputText": "friendly dog loves swimming",
+  "dimensions": 1024,
+  "normalize": true
+}
+```
+
+**2. 文档 vs 查询的区分**
+
+Cohere **强制区分**文档 embedding 和查询 embedding（用 `input_type` 字段）：
+- `search_document`：存入 VectorStore 时用
+- `search_query`：搜索时用
+
+这是 Cohere 的设计理念 — 文档和查询的 embedding 用不同的内部处理，搜索更精准。
+
+Titan v2 **不区分**，文档和查询用同一种方式 embedding。
+
+**3. 维度灵活性**
+
+Titan v2 可以指定输出维度（256/512/1024），适合需要节省存储空间的场景。Cohere 固定 1024 维。
+
+**4. 实际选择建议**
+
+| 场景 | 推荐 |
+| ---- | ---- |
+| Spring AI 1.1.x 项目 | **Cohere** — 兼容性最好，开箱即用 |
+| 需要长文本（>512 token） | **Titan v2** — 支持 8192 tokens |
+| 需要多语言 | Cohere Multilingual 或 Titan v2 |
+| 追求最低成本 | Titan v2（AWS 自研通常更便宜） |
+| 账户未开通 Titan v2 on-demand | **Cohere** — 唯一可用选项 |

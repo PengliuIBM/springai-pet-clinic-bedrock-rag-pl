@@ -1,0 +1,11 @@
+spring:
+  ai:
+    bedrock:
+      titan:
+        embedding:
+          enabled: false
+      cohere:
+        embedding:
+          enabled: true
+          model: cohere.embed-english-v3
+          input-type: SEARCH_DOCUMENT
